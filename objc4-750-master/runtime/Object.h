@@ -27,7 +27,7 @@
 	DEFINED AS:	A common class
 	HEADER FILES:	<objc/Object.h>
 
-*/
+*/ 
 
 #ifndef _OBJC_OBJECT_H_
 #define _OBJC_OBJECT_H_
