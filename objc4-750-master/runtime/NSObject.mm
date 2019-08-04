@@ -271,7 +271,7 @@ enum CrashIfDeallocating {
 template <HaveOld haveOld, HaveNew haveNew,
           CrashIfDeallocating crashIfDeallocating>
 
-// 当newObj为nil是销毁，location为对象的指针
+/// 当newObj为nil是销毁，location为对象的指针
 static id storeWeak(id *location, objc_object *newObj) {
     assert(haveOld  ||  haveNew);
     if (!haveNew) assert(newObj == nil);
