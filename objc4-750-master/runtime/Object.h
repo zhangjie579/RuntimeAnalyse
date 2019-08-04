@@ -42,7 +42,7 @@ __IOS_UNAVAILABLE __TVOS_UNAVAILABLE
 __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE
 OBJC_ROOT_CLASS
 @interface Object
-{ 
+{
 	Class isa;	/* A pointer to the instance's class structure */
 }
 
