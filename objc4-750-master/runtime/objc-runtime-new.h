@@ -42,12 +42,14 @@ private:
     MethodCacheIMP _imp;
     cache_key_t _key;
 #else
+    // 方法的标示
     cache_key_t _key;
     // imp
     MethodCacheIMP _imp;
 #endif
 
 public:
+    // set和get方法
     inline cache_key_t key() const { return _key; }
     inline IMP imp() const { return (IMP)_imp; }
     inline void setKey(cache_key_t newKey) { _key = newKey; }
@@ -58,27 +60,41 @@ public:
 
 
 struct cache_t {
+    // 数据
     struct bucket_t *_buckets;
+    // 散列表长度 - 1
     mask_t _mask;
+    // 已经存的count
     mask_t _occupied;
 
 public:
+    /// get
     struct bucket_t *buckets();
+    /// 散列表长度 - 1
     mask_t mask();
+    /// 存的count
     mask_t occupied();
+    /// 存的count + 1
     void incrementOccupied();
+    /// 给属性赋值
     void setBucketsAndMask(struct bucket_t *newBuckets, mask_t newMask);
+    /// _buckets是否是空的
     void initializeToEmpty();
 
+    /// 容量 mask + 1
     mask_t capacity();
+    /// 空的
     bool isConstantEmptyCache();
+    /// 不是空的
     bool canBeFreed();
 
     static size_t bytesForCapacity(uint32_t cap);
     static struct bucket_t * endMarker(struct bucket_t *b, uint32_t cap);
 
+    /// 扩容
     void expand();
     void reallocate(mask_t oldCapacity, mask_t newCapacity);
+    // 获取缓存方法的bucket_t
     struct bucket_t * find(cache_key_t key, id receiver);
 
     static void bad_cache(id receiver, SEL sel, Class isa) __attribute__((noreturn));
@@ -254,6 +270,7 @@ struct ivar_t {
     uint32_t alignment_raw;
     uint32_t size;
 
+    // 内存对齐
     uint32_t alignment() const {
         if (alignment_raw == ~(uint32_t)0) return 1U << WORD_SHIFT;
         return 1 << alignment_raw;
@@ -605,6 +622,7 @@ struct class_ro_t {
 * countLists/beginLists/endLists iterate the metadata lists
 * count/begin/end iterate the underlying metadata elements
 **********************************************************************/
+/// 方法列表
 template <typename Element, typename List>
 class list_array_tt {
     struct array_t {
@@ -1291,7 +1309,7 @@ struct objc_class : objc_object {
 
     IMP getLoadMethod();
 
-    // Locking: To prevent concurrent realization, hold runtimeLock.
+    // 是否初始化 Locking: To prevent concurrent realization, hold runtimeLock.
     bool isRealized() {
         return data()->flags & RW_REALIZED;
     }

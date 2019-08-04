@@ -6,6 +6,7 @@
 
 __BEGIN_DECLS
 
+/// 实现为汇编, objc_msg_arm.s 323
 extern IMP cache_getImp(Class cls, SEL sel);
 
 extern void cache_fill(Class cls, SEL sel, IMP imp, id receiver);

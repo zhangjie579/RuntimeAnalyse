@@ -360,12 +360,7 @@ IMP _class_lookupMethodAndLoadCache3(id obj, SEL sel, Class cls)
                               YES/*initialize*/, NO/*cache*/, YES/*resolver*/);
 }
 
-/* 执行objc_msgSend方法会走这
- 1.cache
- 2.class method list
- 3.super cache
- 4.super method list
- 5.消息机制 resolveMethod
+
  */
 /***********************************************************************
 * lookUpImpOrForward.

@@ -164,6 +164,7 @@ static inline mask_t cache_next(mask_t i, mask_t mask) {
 // objc_msgSend has lots of registers available.
 // Cache scan decrements. No end marker needed.
 #define CACHE_END_MARKER 0
+/// 下一个哈希值
 static inline mask_t cache_next(mask_t i, mask_t mask) {
     return i ? i-1 : mask;
 }
@@ -248,6 +249,7 @@ static inline mask_t cache_hash(cache_key_t key, mask_t mask)
     return (mask_t)(key & mask);
 }
 
+/// 获取class的cache
 cache_t *getCache(Class cls) 
 {
     assert(cls);
@@ -284,7 +286,7 @@ void bucket_t::set(cache_key_t newKey, IMP newImp)
 }
 
 #else
-
+/// 更新key和imp
 void bucket_t::set(cache_key_t newKey, IMP newImp)
 {
     assert(_key == 0  ||  _key == newKey);
@@ -305,6 +307,7 @@ void bucket_t::set(cache_key_t newKey, IMP newImp)
 
 #endif
 
+/// 给属性赋值
 void cache_t::setBucketsAndMask(struct bucket_t *newBuckets, mask_t newMask)
 {
     // objc_msgSend uses mask and buckets with no locks.
@@ -337,6 +340,7 @@ mask_t cache_t::mask()
     return _mask; 
 }
 
+/// 已经存的count
 mask_t cache_t::occupied() 
 {
     return _occupied;
@@ -347,13 +351,14 @@ void cache_t::incrementOccupied()
     _occupied++;
 }
 
+/// _buckets是否是空的
 void cache_t::initializeToEmpty()
 {
     bzero(this, sizeof(*this));
     _buckets = (bucket_t *)&_objc_empty_cache;
 }
 
-
+/// 容量
 mask_t cache_t::capacity() 
 {
     return mask() ? mask()+1 : 0; 
@@ -361,21 +366,24 @@ mask_t cache_t::capacity()
 
 
 #if CACHE_END_MARKER
-
+/// 容量的bucket_t的size
 size_t cache_t::bytesForCapacity(uint32_t cap) 
 {
     // fixme put end marker inline when capacity+1 malloc is inefficient
     return sizeof(bucket_t) * (cap + 1);
 }
 
+/// b后面cap个的地址
 bucket_t *cache_t::endMarker(struct bucket_t *b, uint32_t cap) 
 {
     // bytesForCapacity() chooses whether the end marker is inline or not
     return (bucket_t *)((uintptr_t)b + bytesForCapacity(cap)) - 1;
 }
 
+/// 初始化bucket_t
 bucket_t *allocateBuckets(mask_t newCapacity)
 {
+    // 分配一个额外的桶以标记列表的末尾
     // Allocate one extra bucket to mark the end of the list.
     // This can't overflow mask_t because newCapacity is a power of 2.
     // fixme instead put the end mark inline when +1 is malloc-inefficient
@@ -457,7 +465,7 @@ bucket_t *emptyBucketsForCapacity(mask_t capacity, bool allocate = true)
     return emptyBucketsList[index];
 }
 
-
+/// 空的
 bool cache_t::isConstantEmptyCache()
 {
     return 
@@ -470,9 +478,8 @@ bool cache_t::canBeFreed()
     return !isConstantEmptyCache();
 }
 
-
-void cache_t::reallocate(mask_t oldCapacity, mask_t newCapacity)
-{
+/// 释放旧的, 重写设置新的
+void cache_t::reallocate(mask_t oldCapacity, mask_t newCapacity) {
     bool freeOld = canBeFreed();
 
     bucket_t *oldBuckets = buckets();
@@ -485,15 +492,17 @@ void cache_t::reallocate(mask_t oldCapacity, mask_t newCapacity)
     assert(newCapacity > 0);
     assert((uintptr_t)(mask_t)(newCapacity-1) == newCapacity-1);
 
+    // 把新的值赋值给cache
     setBucketsAndMask(newBuckets, newCapacity - 1);
     
+    // 释放旧的
     if (freeOld) {
         cache_collect_free(oldBuckets, oldCapacity);
         cache_collect(false);
     }
 }
 
-
+/// 错误的cache, 没找到cache
 void cache_t::bad_cache(id receiver, SEL sel, Class isa)
 {
     // Log in separate steps in case the logging itself causes a crash.
@@ -520,32 +529,35 @@ void cache_t::bad_cache(id receiver, SEL sel, Class isa)
          "invalid object, or a memory error somewhere else.");
 }
 
-
-bucket_t * cache_t::find(cache_key_t k, id receiver)
-{
+/// cache中找方法, 与receiver无关
+bucket_t * cache_t::find(cache_key_t k, id receiver) {
     assert(k != 0);
 
     bucket_t *b = buckets();
     mask_t m = mask();
+    // 求哈希值
+    // 由于是向后找空位解决哈希冲突的
     mask_t begin = cache_hash(k, m);
     mask_t i = begin;
     do {
         if (b[i].key() == 0  ||  b[i].key() == k) {
             return &b[i];
         }
+        // 向后查找
     } while ((i = cache_next(i, m)) != begin);
 
-    // hack
+    // hack, 求出cache属于的class
     Class cls = (Class)((uintptr_t)this - offsetof(objc_class, cache));
+    // 没找到cache
     cache_t::bad_cache(receiver, (SEL)k, cls);
 }
 
-
-void cache_t::expand()
-{
+/// 扩容
+void cache_t::expand() {
     cacheUpdateLock.assertLocked();
     
     uint32_t oldCapacity = capacity();
+    // 2倍
     uint32_t newCapacity = oldCapacity ? oldCapacity*2 : INIT_CACHE_SIZE;
 
     if ((uint32_t)(mask_t)newCapacity != newCapacity) {
@@ -554,27 +566,33 @@ void cache_t::expand()
         newCapacity = oldCapacity;
     }
 
+    /// 释放旧的, 重写设置新的
     reallocate(oldCapacity, newCapacity);
 }
 
-
-static void cache_fill_nolock(Class cls, SEL sel, IMP imp, id receiver)
-{
+/// 缓存imp, 只与class有关
+static void cache_fill_nolock(Class cls, SEL sel, IMP imp, id receiver) {
     cacheUpdateLock.assertLocked();
 
+    // 1.class没初始化 - return
     // Never cache before +initialize is done
     if (!cls->isInitialized()) return;
 
+    // 2.已经存在sel - return
     // Make sure the entry wasn't added to the cache by some other thread 
     // before we grabbed the cacheUpdateLock.
     if (cache_getImp(cls, sel)) return;
 
+    // 3.获取class的cache
     cache_t *cache = getCache(cls);
+    // 获取sel -> key
     cache_key_t key = getKey(sel);
 
+    // 4.获取已经存的数量newOccupied, cache的容量capacity
     // Use the cache as-is if it is less than 3/4 full
     mask_t newOccupied = cache->occupied() + 1;
     mask_t capacity = cache->capacity();
+    // 5.是空的 -> 释放旧的，创建新的
     if (cache->isConstantEmptyCache()) {
         // Cache is read-only. Replace it.
         cache->reallocate(capacity, capacity ?: INIT_CACHE_SIZE);
@@ -582,19 +600,24 @@ static void cache_fill_nolock(Class cls, SEL sel, IMP imp, id receiver)
     else if (newOccupied <= capacity / 4 * 3) {
         // Cache is less than 3/4 full. Use it as-is.
     }
+    // 6.count > capacity / 4 * 3 - 扩容
     else {
         // Cache is too full. Expand it.
         cache->expand();
     }
 
+    // 7.根据key -> 看cache中是否有了bucket_t
     // Scan for the first unused slot and insert there.
     // There is guaranteed to be an empty slot because the 
     // minimum size is 4 and we resized at 3/4 full.
     bucket_t *bucket = cache->find(key, receiver);
+    // 8.如果没有, 存的count + 1
     if (bucket->key() == 0) cache->incrementOccupied();
+    // 9.更新key和imp
     bucket->set(key, imp);
 }
 
+/// 缓存方法, 只与class有关
 void cache_fill(Class cls, SEL sel, IMP imp, id receiver)
 {
 #if !DEBUG_TASK_THREADS
@@ -607,20 +630,27 @@ void cache_fill(Class cls, SEL sel, IMP imp, id receiver)
 }
 
 
+/// 删除class的cache
 // Reset this entire cache to the uncached lookup by reallocating it.
 // This must not shrink the cache - that breaks the lock-free scheme.
 void cache_erase_nolock(Class cls)
 {
     cacheUpdateLock.assertLocked();
 
+    // 1.获取class的cache
     cache_t *cache = getCache(cls);
 
+    // 2.cache的容量
     mask_t capacity = cache->capacity();
+    
+    // 3.判断是否有buckets, 有需要删除
     if (capacity > 0  &&  cache->occupied() > 0) {
         auto oldBuckets = cache->buckets();
         auto buckets = emptyBucketsForCapacity(capacity);
+        // 容量 - 1
         cache->setBucketsAndMask(buckets, capacity - 1); // also clears occupied
 
+        // 释放class的cache - oldBuckets
         cache_collect_free(oldBuckets, capacity);
         cache_collect(false);
     }

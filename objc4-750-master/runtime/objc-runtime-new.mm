@@ -4793,7 +4793,7 @@ static method_t *findMethodInSortedMethodList(SEL key, const method_list_t *list
 }
 
 /***********************************************************************
-* getMethodNoSuper_nolock
+* getMethodNoSuper_nolock 从方法列表mlist查找sel方法
 * fixme
 * Locking: runtimeLock must be read- or write-locked by the caller
 **********************************************************************/
@@ -4825,9 +4825,8 @@ static method_t *search_method_list(const method_list_t *mlist, SEL sel)
     return nil;
 }
 
-/// 从方法列表查找method，no super
-static method_t *
-getMethodNoSuper_nolock(Class cls, SEL sel)
+/// 从方法列表查找method，no super, 不包括super
+static method_t *getMethodNoSuper_nolock(Class cls, SEL sel)
 {
     runtimeLock.assertLocked();
 
@@ -4946,7 +4945,14 @@ IMP _class_lookupMethodAndLoadCache3(id obj, SEL sel, Class cls)
                               YES/*initialize*/, NO/*cache*/, YES/*resolver*/);
 }
 
+
 /***********************************************************************
+ 执行objc_msgSend方法会走这
+     1.cache
+     2.class method list
+     3.super cache
+     4.super method list
+     5.消息机制 resolveMethod
 * lookUpImpOrForward.
 * The standard IMP lookup. 
 * initialize==NO tries to avoid +initialize (but sometimes fails)
@@ -4968,7 +4974,7 @@ IMP lookUpImpOrForward(Class cls, SEL sel, id inst,
 
     runtimeLock.assertUnlocked();
 
-    // Optimistic cache lookup 有cache
+    // 1.从cache中找Optimistic cache lookup
     if (cache) {
         // 找到imp，直接返回
         imp = cache_getImp(cls, sel);
@@ -4987,7 +4993,7 @@ IMP lookUpImpOrForward(Class cls, SEL sel, id inst,
     runtimeLock.lock();
     checkIsKnownClass(cls);
 
-    /// 初始化
+    // 2.没初始化, 就初始化 - 合并方法、protocol、属性...
     if (!cls->isRealized()) {
         realizeClass(cls);
     }
@@ -5110,8 +5116,8 @@ IMP lookUpImpOrNil(Class cls, SEL sel, id inst,
 * Like _class_lookupMethodAndLoadCache, but does not search superclasses.
 * Caches and returns objc_msgForward if the method is not found in the class.
 **********************************************************************/
-IMP lookupMethodInClassAndLoadCache(Class cls, SEL sel)
-{
+/// 只在自己的class和cache中查找selector的imp, 不在super的
+IMP lookupMethodInClassAndLoadCache(Class cls, SEL sel) {
     Method meth;
     IMP imp;
 
@@ -5119,22 +5125,24 @@ IMP lookupMethodInClassAndLoadCache(Class cls, SEL sel)
     // but it's only used for .cxx_construct/destruct so we don't care
     assert(sel == SEL_cxx_construct  ||  sel == SEL_cxx_destruct);
 
-    // Search cache first. 取cache
+    // 1.cache找imp Search cache first.
     imp = cache_getImp(cls, sel);
     if (imp) return imp;
 
     // Cache miss. Search method list.
 
     mutex_locker_t lock(runtimeLock);
-    // 从方法列表查找
+    // 2.从方法列表查找, 不包括super
     meth = getMethodNoSuper_nolock(cls, sel);
 
+    // 3.找到方法, 把method存到cache, 然后return imp
     if (meth) {
         // Hit in method list. Cache it.
         cache_fill(cls, sel, meth->imp, nil);
         return meth->imp;
     } else {
         // Miss in method list. Cache objc_msgForward.
+        // 4.没找到方法 - 方法存到cache, imp是_objc_msgForward_impcache
         // objc_msgForward指走消息机制
         cache_fill(cls, sel, _objc_msgForward_impcache, nil);
         return _objc_msgForward_impcache;

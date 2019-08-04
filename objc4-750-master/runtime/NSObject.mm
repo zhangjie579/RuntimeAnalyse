@@ -163,6 +163,7 @@ void SideTable::unlockTwo<DontHaveOld, DoHaveNew>
 }
 
 
+// 全局保存的SideTableBuf(实际为SideTable)
 // We cannot use a C++ static initializer to initialize SideTables because
 // libc calls us before our C++ initializers run. We also don't want a global 
 // pointer to this struct because of the extra indirection.
@@ -170,10 +171,13 @@ void SideTable::unlockTwo<DontHaveOld, DoHaveNew>
 alignas(StripedMap<SideTable>) static uint8_t 
     SideTableBuf[sizeof(StripedMap<SideTable>)];
 
+/// 初始化SideTable
 static void SideTableInit() {
+    // 用StripedMap<SideTable>() 初始化SideTableBuf
     new (SideTableBuf) StripedMap<SideTable>();
 }
 
+/// 获取SideTable
 static StripedMap<SideTable>& SideTables() {
     return *reinterpret_cast<StripedMap<SideTable>*>(SideTableBuf);
 }
@@ -253,6 +257,7 @@ objc_storeStrong(id *location, id obj)
     }
     objc_retain(obj);
     *location = obj;
+    // 释放之前这个位置上的
     objc_release(prev);
 }
 
