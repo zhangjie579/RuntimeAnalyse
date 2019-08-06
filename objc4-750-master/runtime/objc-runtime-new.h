@@ -1,4 +1,4 @@
-/*
+ /*
  * Copyright (c) 2005-2007 Apple Inc.  All Rights Reserved.
  * 
  * @APPLE_LICENSE_HEADER_START@
@@ -113,12 +113,15 @@ typedef struct classref * classref_t;
 * FlagMask is used to stash extra bits in the entsize field
 *   (e.g. method list fixup markers)
 **********************************************************************/
+/// 1维数组
 template <typename Element, typename List, uint32_t FlagMask>
 struct entsize_list_tt {
+    /// 通过位运算保存很多属性
     uint32_t entsizeAndFlags;
     uint32_t count;
     Element first;
 
+    /// 元素所占的size
     uint32_t entsize() const {
         return entsizeAndFlags & ~FlagMask;
     }
@@ -126,6 +129,7 @@ struct entsize_list_tt {
         return entsizeAndFlags & FlagMask;
     }
 
+    /// 获取第i位的元素
     Element& getOrEnd(uint32_t i) const { 
         assert(i <= count);
         return *(Element *)((uint8_t *)&first + i*entsize()); 
@@ -143,6 +147,7 @@ struct entsize_list_tt {
         return sizeof(entsize_list_tt) + (count-1)*entsize;
     }
 
+    /// copy
     List *duplicate() const {
         auto *dup = (List *)calloc(this->byteSize(), 1);
         dup->entsizeAndFlags = this->entsizeAndFlags;
@@ -151,6 +156,7 @@ struct entsize_list_tt {
         return dup;
     }
 
+    /// 迭代器
     struct iterator;
     const iterator begin() const { 
         return iterator(*static_cast<const List*>(this), 0); 
@@ -168,6 +174,7 @@ struct entsize_list_tt {
     struct iterator {
         uint32_t entsize;
         uint32_t index;  // keeping track of this saves a divide in operator-
+        // index位的元素
         Element* element;
 
         typedef std::random_access_iterator_tag iterator_category;
@@ -178,17 +185,20 @@ struct entsize_list_tt {
 
         iterator() { }
 
+        /// iterator初始化方法
         iterator(const List& list, uint32_t start = 0)
             : entsize(list.entsize())
             , index(start)
             , element(&list.getOrEnd(start))
         { }
 
+        /// 后delta位的迭代器
         const iterator& operator += (ptrdiff_t delta) {
             element = (Element*)((uint8_t *)element + delta*entsize);
             index += (int32_t)delta;
             return *this;
         }
+        /// 前delta位的迭代器
         const iterator& operator -= (ptrdiff_t delta) {
             element = (Element*)((uint8_t *)element - delta*entsize);
             index -= (int32_t)delta;
@@ -214,11 +224,14 @@ struct entsize_list_tt {
             return (ptrdiff_t)this->index - (ptrdiff_t)rhs.index;
         }
 
+        /// 取引用
         Element& operator * () const { return *element; }
+        /// 取指针
         Element* operator -> () const { return element; }
 
         operator Element& () const { return *element; }
 
+        /// 判等
         bool operator == (const iterator& rhs) const {
             return this->element == rhs.element;
         }
@@ -263,6 +276,7 @@ struct ivar_t {
     // Some code uses all 64 bits. class_addIvar() over-allocates the 
     // offset for their benefit.
 #endif
+    /// 偏移量, 通过它可以获取value
     int32_t *offset;
     const char *name;
     const char *type;
@@ -288,6 +302,7 @@ struct method_list_t : entsize_list_tt<method_t, method_list_t, 0x3> {
     bool isFixedUp() const;
     void setFixedUp();
 
+    /// 求method的索引
     uint32_t indexOfMethod(const method_t *meth) const {
         uint32_t i = 
             (uint32_t)(((uintptr_t)meth - (uintptr_t)this) / entsize());
@@ -297,6 +312,7 @@ struct method_list_t : entsize_list_tt<method_t, method_list_t, 0x3> {
 };
 
 struct ivar_list_t : entsize_list_tt<ivar_t, ivar_list_t, 0> {
+    /// 是否包含这个成员属性
     bool containsIvar(Ivar ivar) const {
         return (ivar >= (Ivar)&*begin()  &&  ivar < (Ivar)&*end());
     }
@@ -381,6 +397,7 @@ struct protocol_list_t {
         return (protocol_list_t *)memdup(this, this->byteSize());
     }
 
+    /// 相当于迭代器, const_: 不变的
     typedef protocol_ref_t* iterator;
     typedef const protocol_ref_t* const_iterator;
 
@@ -400,6 +417,7 @@ struct protocol_list_t {
 
 struct locstamped_category_t {
     category_t *cat;
+    // 根据它可以获得是否有class属性..
     struct header_info *hi;
 };
 
@@ -512,12 +530,12 @@ struct locstamped_category_list_t {
 #elif 1
 // Leaks-compatible version that steals low bits only.
 
-// class or superclass has .cxx_construct implementation
+// class or superclass has .cxx_construct implementation 构造函数
 #define RW_HAS_CXX_CTOR       (1<<18)
-// class or superclass has .cxx_destruct implementation
+// class or superclass has .cxx_destruct implementation 析构函数
 #define RW_HAS_CXX_DTOR       (1<<17)
 // class or superclass has default alloc/allocWithZone: implementation
-// Note this is is stored in the metaclass.
+// Note this is is stored in the metaclass. 有默认的allocWithZone
 #define RW_HAS_DEFAULT_AWZ    (1<<16)
 // class's instances requires raw isa 类的实例需要原始isa
 #define RW_REQUIRES_RAW_ISA   (1<<15)
@@ -530,6 +548,7 @@ struct locstamped_category_list_t {
 //   _tryRetain/_isDeallocating/retainWeakReference/allowsWeakReference
 #define FAST_HAS_DEFAULT_RR     (1UL<<2)
 // data pointer 查找第0位，表示是否swift
+/// 用于获取class_rw_t
 #define FAST_DATA_MASK          0x00007ffffffffff8UL
 
 #else
@@ -590,17 +609,21 @@ struct class_ro_t {
     uint32_t reserved;
 #endif
 
+    /// 成员变量布局
     const uint8_t * ivarLayout;
     
     const char * name; // 类名
     // 是一维数组，不可变👍
     method_list_t * baseMethodList; // 方法列表
     protocol_list_t * baseProtocols;
-    const ivar_list_t * ivars; // 成员属性列表
+    /// 成员属性列表, const表示ivars指向的值不能变, 指向的地址可以变
+    const ivar_list_t * ivars;
 
     const uint8_t * weakIvarLayout;
+    /// 属性列表
     property_list_t *baseProperties;
 
+    /// 方法列表
     method_list_t *baseMethods() const {
         return baseMethodList;
     }
@@ -622,25 +645,34 @@ struct class_ro_t {
 * countLists/beginLists/endLists iterate the metadata lists
 * count/begin/end iterate the underlying metadata elements
 **********************************************************************/
-/// 方法列表
+/// 方法列表(2维数组)
 template <typename Element, typename List>
 class list_array_tt {
+    /// 2维List
     struct array_t {
         uint32_t count;
+        /// 等价于 List **, 数组指针
         List* lists[0];
 
+        /// 有count个list的array_t内存
         static size_t byteSize(uint32_t count) {
             return sizeof(array_t) + count*sizeof(lists[0]);
         }
+        /// array_t所占内存
         size_t byteSize() {
             return byteSize(count);
         }
     };
 
  protected:
+    /// 迭代器, List是泛型
+    /// 可以看出为2维数组
     class iterator {
+        /// 每一层的list
         List **lists;
+        /// 最后一层的后一层
         List **listsEnd;
+        /// list的迭代器
         typename List::iterator m, mEnd;
 
      public:
@@ -653,6 +685,7 @@ class list_array_tt {
             }
         }
 
+        /// 获取值
         const Element& operator * () const {
             return *m;
         }
@@ -667,13 +700,19 @@ class list_array_tt {
             return false;
         }
 
+        /// 可以看出为2维数组
         const iterator& operator ++ () {
             assert(m != mEnd);
+            // 1.list的迭代器后移
             m++;
+            // 2. == end
             if (m == mEnd) {
                 assert(lists != listsEnd);
+                // 3. 下一个list
                 lists++;
+                // 4.list != 最后的
                 if (lists != listsEnd) {
+                    // 5.更新m, 完了一个数组, 再下一个数组
                     m = (*lists)->begin();
                     mEnd = (*lists)->end();
                 }
@@ -683,8 +722,11 @@ class list_array_tt {
     };
 
  private:
+    /// union: 一次只有一种值
     union {
+        /// 类型: array_t
         List* list;
+        /// (array_t *)(arrayAndFlag & ~1);
         uintptr_t arrayAndFlag;
     };
 
@@ -692,6 +734,7 @@ class list_array_tt {
         return arrayAndFlag & 1;
     }
 
+    /// array_t有2维的list
     array_t *array() {
         return (array_t *)(arrayAndFlag & ~1);
     }
@@ -702,12 +745,11 @@ class list_array_tt {
 
  public:
 
+    /// 每个list的count的总和
     uint32_t count() {
         uint32_t result = 0;
         for (auto lists = beginLists(), end = endLists(); 
-             lists != end;
-             ++lists)
-        {
+             lists != end; ++lists) {
             result += (*lists)->count;
         }
         return result;
@@ -722,7 +764,7 @@ class list_array_tt {
         return iterator(e, e);
     }
 
-
+    /// 多少个list
     uint32_t countLists() {
         if (hasArray()) {
             return array()->count;
@@ -733,10 +775,12 @@ class list_array_tt {
         }
     }
 
+    /// 2维, 开始的list
     List** beginLists() {
         if (hasArray()) {
             return array()->lists;
         } else {
+            // List *list, 再取地址就2个*
             return &list;
         }
     }
@@ -751,40 +795,53 @@ class list_array_tt {
         }
     }
 
-    /// 通过对原有地址做位移，并将新创建的method_list_t结构体copy到方法列表中
+    /// 将addedLists方法添加到进去, 并且放在原来方法的前面
     void attachLists(List* const * addedLists, uint32_t addedCount) {
         if (addedCount == 0) return;
 
+        // 1.是array
         if (hasArray()) {
-            // many lists -> many lists
+            // 1.1.更新count
             uint32_t oldCount = array()->count;
             uint32_t newCount = oldCount + addedCount;
+            // 1.2.重新分配newCount的内存的array
             setArray((array_t *)realloc(array(), array_t::byteSize(newCount)));
+            // 1.3.更新array的count
             array()->count = newCount;
-            // 这是之前的method, 从addedCount开始
-            memmove(array()->lists + addedCount, array()->lists, 
+            // 1.4.这是old的method, 从addedCount开始, 可以看出它是放在new的后面
+            memmove(array()->lists + addedCount, array()->lists,
                     oldCount * sizeof(array()->lists[0]));
-            // 这是新加的
-            memcpy(array()->lists, addedLists, 
+            // 1.5.这是新加的, 看出它是放在前面
+            memcpy(array()->lists, addedLists,
                    addedCount * sizeof(array()->lists[0]));
         }
+        // 2.之前没list, 把list指向addedLists的地址
         else if (!list  &&  addedCount == 1) {
             // 0 lists -> 1 list
             list = addedLists[0];
         } 
         else {
-            // 1 list -> many lists
+            // 3.之前有list
+            // list -> many lists
             List* oldList = list;
+            // 3.1.之前有list为1, 否则为0
             uint32_t oldCount = oldList ? 1 : 0;
+            // 3.2.加上新的count
             uint32_t newCount = oldCount + addedCount;
+            // 3.3.重新分配newCount的array_t内存
             setArray((array_t *)malloc(array_t::byteSize(newCount)));
+            // 3.4.更新count
             array()->count = newCount;
+            // 3.5.有old, old放在后面
             if (oldList) array()->lists[addedCount] = oldList;
-            memcpy(array()->lists, addedLists, 
+            // 3.6.把new的copy到开头
+            // 参数说明: 开始地址, 数据, 所占内存
+            memcpy(array()->lists, addedLists,
                    addedCount * sizeof(array()->lists[0]));
         }
     }
 
+    /// 释放
     void tryFree() {
         if (hasArray()) {
             for (uint32_t i = 0; i < array()->count; i++) {
@@ -797,6 +854,7 @@ class list_array_tt {
         }
     }
 
+    /// copy一份
     template<typename Result>
     Result duplicate() {
         Result result;
@@ -817,9 +875,8 @@ class list_array_tt {
     }
 };
 
-
-class method_array_t : 
-    public list_array_tt<method_t, method_list_t> 
+/// 2维数组
+class method_array_t : public list_array_tt<method_t, method_list_t>
 {
     typedef list_array_tt<method_t, method_list_t> Super;
 
@@ -882,6 +939,8 @@ struct class_rw_t {
     uint32_t index;
 #endif
 
+    // 一些关于flag的方法
+    
     void setFlags(uint32_t set) 
     {
         OSAtomicOr32Barrier(set, &flags);
@@ -958,9 +1017,12 @@ private:
 
 public:
 
+    /// 获得rw
     class_rw_t* data() {
         return (class_rw_t *)(bits & FAST_DATA_MASK);
     }
+    
+    /// 更新rw
     void setData(class_rw_t *newData)
     {
         assert(!data()  ||  (newData->flags & (RW_REALIZING | RW_FUTURE)));
@@ -973,6 +1035,7 @@ public:
     }
 
 #if FAST_HAS_DEFAULT_RR
+    /// 有默认的retain、release... 内存分配方法
     bool hasDefaultRR() {
         return getBit(FAST_HAS_DEFAULT_RR);
     }
@@ -1025,6 +1088,7 @@ public:
         setBits(FAST_HAS_CXX_CTOR);
     }
 #else
+    /// 有构造函数, cxx_construct
     bool hasCxxCtor() {
         return data()->flags & RW_HAS_CXX_CTOR;
     }
@@ -1041,6 +1105,7 @@ public:
         setBits(FAST_HAS_CXX_DTOR);
     }
 #else
+    /// 有析构函数, cxx_destruct
     bool hasCxxDtor() {
         return data()->flags & RW_HAS_CXX_DTOR;
     }
@@ -1151,19 +1216,24 @@ public:
  继承自objc_object，也有isa，执行meta class
  */
 struct objc_class : objc_object {
-    // Class ISA;
+    // objc_object保存了isa_t isa;
+    
     Class superclass;
+    /// 方法缓存
     cache_t cache;             // formerly cache pointer and vtable
     // 方法，属性，protocol...都保存在这
     class_data_bits_t bits;    // class_rw_t * plus custom rr/alloc flags
 
-    // 参数那些保存在这里面
+    /// 参数保存在这里面、rw
     class_rw_t *data() { 
         return bits.data();
     }
+    /// 更新rw
     void setData(class_rw_t *newData) {
         bits.setData(newData);
     }
+    
+    /// flag的一些方法
 
     void setInfo(uint32_t set) {
         assert(isFuture()  ||  isRealized());
@@ -1182,6 +1252,7 @@ struct objc_class : objc_object {
         data()->changeFlags(set, clear);
     }
 
+    /// 是否有自定义的内存管理方法 - retain、release...
     bool hasCustomRR() {
         return ! bits.hasDefaultRR();
     }
@@ -1192,6 +1263,7 @@ struct objc_class : objc_object {
     void setHasCustomRR(bool inherited = false);
     void printCustomRR(bool inherited);
 
+    /// 是否有默认的alloc/allocWithZone:
     bool hasCustomAWZ() {
         return ! bits.hasDefaultAWZ();
     }
@@ -1314,7 +1386,7 @@ struct objc_class : objc_object {
         return data()->flags & RW_REALIZED;
     }
 
-    // Returns true if this is an unrealized future class.
+    // Returns true if this is an unrealized future class. 如果这是未实现的未来类，则返回true
     // Locking: To prevent concurrent realization, hold runtimeLock.
     bool isFuture() { 
         return data()->flags & RW_FUTURE;
@@ -1356,6 +1428,8 @@ struct objc_class : objc_object {
     const char *demangledName(bool realize = false);
     const char *nameForLogging();
 
+    /// 所占内存相关的方法x
+    
     // 没有对齐的属性的起始偏移量
     // May be unaligned depending on class's ivars.
     uint32_t unalignedInstanceStart() {
@@ -1363,6 +1437,7 @@ struct objc_class : objc_object {
         return data()->ro->instanceStart;
     }
 
+    /// 对齐的属性的起始偏移量
     // Class's instance start rounded up to a pointer-size boundary.
     // This is used for ARC layout bitmaps.
     uint32_t alignedInstanceStart() {
@@ -1410,7 +1485,7 @@ struct objc_class : objc_object {
 
 };
 
-
+// MARK: - swift_class_t
 struct swift_class_t : objc_class {
     uint32_t flags;
     uint32_t instanceAddressOffset;
@@ -1428,27 +1503,37 @@ struct swift_class_t : objc_class {
     }
 };
 
-
+/// 分类
 struct category_t {
     const char *name;
+    /// 哪个class的
     classref_t cls;
+    /// 对象方法
     struct method_list_t *instanceMethods;
+    /// 类方法
     struct method_list_t *classMethods;
+    /// 协议
     struct protocol_list_t *protocols;
+    /// 对象属性
     struct property_list_t *instanceProperties;
-    // Fields below this point are not always present on disk.
+    /// 类属性 Fields below this point are not always present on disk.
     struct property_list_t *_classProperties;
 
+    /// 元类是类方法，其他的是对象方法
     method_list_t *methodsForMeta(bool isMeta) {
         if (isMeta) return classMethods;
         else return instanceMethods;
     }
 
+    /// 不是元类是对象属性, 有分类class属性才返回class属性, 否则nil
     property_list_t *propertiesForMeta(bool isMeta, struct header_info *hi);
 };
 
+/// super结构体
 struct objc_super2 {
+    /// 为当前class的objc
     id receiver;
+    /// 当前的类名
     Class current_class;
 };
 
@@ -1457,7 +1542,7 @@ struct message_ref_t {
     SEL sel;
 };
 
-
+/// 获取protocol的方法
 extern Method protocol_getMethod(protocol_t *p, SEL sel, bool isRequiredMethod, bool isInstanceMethod, bool recursive);
 
 static inline void
@@ -1473,9 +1558,11 @@ foreach_realized_class_and_subclass_2(Class top, unsigned& count,
         }
         if (!code(cls)) break;
 
+        // 1.有firstSubclass, cls = firstSubclass
         if (cls->data()->firstSubclass) {
             cls = cls->data()->firstSubclass;
         } else {
+            // 2.没兄弟, 找super
             while (!cls->data()->nextSiblingClass  &&  cls != top) {
                 cls = cls->superclass;
                 if (--count == 0) {
@@ -1491,7 +1578,7 @@ foreach_realized_class_and_subclass_2(Class top, unsigned& count,
 extern Class firstRealizedClass();
 extern unsigned int unreasonableClassCount();
 
-// Enumerates a class and all of its realized subclasses.
+// Enumerates a class and all of its realized subclasses. 遍历class和所有它实现的子类
 static inline void
 foreach_realized_class_and_subclass(Class top,
                                     std::function<void (Class)> code)
@@ -1506,7 +1593,7 @@ foreach_realized_class_and_subclass(Class top,
     });
 }
 
-// Enumerates all realized classes and metaclasses.
+// Enumerates all realized classes and metaclasses. 遍历所有实现的类和元类
 static inline void
 foreach_realized_class_and_metaclass(std::function<void (Class)> code) 
 {
@@ -1514,8 +1601,7 @@ foreach_realized_class_and_metaclass(std::function<void (Class)> code)
     
     for (Class top = firstRealizedClass(); 
          top != nil; 
-         top = top->data()->nextSiblingClass) 
-    {
+         top = top->data()->nextSiblingClass) {
         foreach_realized_class_and_subclass_2(top, count,
                                               [&code](Class cls) -> bool
         {

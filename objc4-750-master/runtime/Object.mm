@@ -37,23 +37,21 @@ typedef struct objc_object *id;
 
 @implementation Object
 
-+ (id)initialize
-{
++ (id)initialize {
     return self; 
 }
 
-+ (id)class
-{
+/// 这个class返回self, 对象方法的class -> isa
++ (id)class {
     return self;
 }
 
--(id) retain
-{
+/// 引用计数 + 1
+-(id) retain {
     return _objc_rootRetain(self);
 }
 
--(void) release
-{
+-(void) release {
     _objc_rootRelease(self);
 }
 
@@ -62,8 +60,7 @@ typedef struct objc_object *id;
     return _objc_rootAutorelease(self);
 }
 
-+(id) retain
-{
++(id) retain {
     return self;
 }
 

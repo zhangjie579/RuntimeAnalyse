@@ -4402,8 +4402,8 @@ _category_getLoadMethod(Category cat)
 * Return a category's instance or class properties.
 * hi is the image containing the category.
 **********************************************************************/
-property_list_t *
-category_t::propertiesForMeta(bool isMeta, struct header_info *hi)
+/// 不是元类是对象属性, 有分类class属性才返回class属性, 否则nil
+property_list_t *category_t::propertiesForMeta(bool isMeta, struct header_info *hi)
 {
     if (!isMeta) return instanceProperties;
     else if (hi->info()->hasCategoryClassProperties()) return _classProperties;

@@ -116,22 +116,25 @@
     return dataPtr[index];
 }
 
-- (unsigned)indexOf:anObject
-{
+/// 顺序搜索
+- (unsigned)indexOf:anObject {
     register id *this = dataPtr;
+    // 最后一个的指针
     register id *last = this + numElements;
+    // 遍历
     while (this < last) {
+        // 找到就返回
         if (*this == anObject)
-	    return this - dataPtr;
-	this++;
+            return this - dataPtr;
+        this++;
     }
     return NX_NOT_IN_LIST;
 }
 
-- (id)lastObject
-{
-    if (! numElements)
-	return nil;
+- (id)lastObject {
+    if (!numElements)
+        return nil;
+    // 最后一个的地址
     return dataPtr[numElements - 1];
 }
 
@@ -145,33 +148,42 @@
     return self;
 }
 
-- (id)insertObject:anObject at:(unsigned)index
-{
+- (id)insertObject:anObject at:(unsigned)index {
     register id *this, *last, *prev;
-    if (! anObject) return nil;
+    // 1.没值
+    if (!anObject) return nil;
+    // 2.越界了
     if (index > numElements)
         return nil;
+    // 3.扩容
     if ((numElements + 1) > maxElements) {
-    volatile id *tempDataPtr;
-	/* we double the capacity, also a good size for malloc */
-	maxElements += maxElements + 1;
-	tempDataPtr = (id *) realloc (dataPtr, DATASIZE(maxElements));
-	dataPtr = (id*)tempDataPtr;
+        volatile id *tempDataPtr;
+        /* we double the capacity, also a good size for malloc */
+        maxElements += maxElements + 1;
+        // 重新分配内存
+        tempDataPtr = (id *) realloc (dataPtr, DATASIZE(maxElements));
+        dataPtr = (id*)tempDataPtr;
     }
+    
+    // 已经存的后面一个位置
     this = dataPtr + numElements;
+    // this的前一个
     prev = this - 1;
+    // 插入的位置
     last = dataPtr + index;
+    // 4.index ~ numElements - 1位置的, 需要后移一个位
     while (this > last) 
-	*this-- = *prev--;
+        *this-- = *prev--;
+    // 5.插入anObject到index
     *last = anObject;
+    // 数量 + 1
     numElements++;
     return self;
 }
 
-- (id)addObject:anObject
-{
+/// 添加 - 为插入到numElements位, 即已经存的后面一个位
+- (id)addObject:anObject {
     return [self insertObject:anObject at:numElements];
-    
 }
 
 
@@ -195,15 +207,24 @@
 {
     register id *this, *last, *next;
     id retval;
+    // 1.越界, 不管
     if (index >= numElements)
         return nil;
+    // 2.index + 1 ~ numElements - 1的需要前移1位
+    
+    // 需要删除的位
     this = dataPtr + index;
+    // 最后一位的后一位
     last = dataPtr + numElements;
+    // 前移1位的start
     next = this + 1;
     retval = *this;
+    // 循环, 前移, this = next
     while (next < last)
-	*this++ = *next++;
+        *this++ = *next++;
+    // 数量 - 1
     numElements--;
+    // 返回index位的
     return retval;
 }
 
@@ -213,39 +234,39 @@
     this = dataPtr;
     last = dataPtr + numElements;
     while (this < last) {
-	if (*this == anObject)
-	    return [self removeObjectAt:this - dataPtr];
-	this++;
+        // 循环找到anObject的index
+        if (*this == anObject)
+            return [self removeObjectAt:this - dataPtr];
+        this++;
     }
     return nil;
 }
 
 - (id)removeLastObject
 {
-    if (! numElements)
-	return nil;
+    if (!numElements)
+        return nil;
     return [self removeObjectAt: numElements - 1];
 }
 
-- (id)empty
-{
+- (id)empty {
     numElements = 0;
     return self;
 }
 
-- (id)replaceObject:anObject with:newObject
-{
+- (id)replaceObject:anObject with:newObject {
     register id *this, *last;
     if (! newObject)
         return nil;
     this = dataPtr;
     last = dataPtr + numElements;
     while (this < last) {
-	if (*this == anObject) {
-	    *this = newObject;
-	    return anObject;
-	}
-	this++;
+        // 找到anObject的指针, 然后改变为newObject
+        if (*this == anObject) {
+            *this = newObject;
+            return anObject;
+        }
+        this++;
     }
     return nil;
 }
@@ -254,38 +275,37 @@
 {
     register id *this;
     id retval;
-    if (! newObject)
+    if ( newObject)
         return nil;
     if (index >= numElements)
         return nil;
+    // 加到index的指针
     this = dataPtr + index;
     retval = *this;
+    // 改变为newObject
     *this = newObject;
     return retval;
 }
 
-- (id)makeObjectsPerform:(SEL)aSelector
-{
+- (id)makeObjectsPerform:(SEL)aSelector {
     unsigned	count = numElements;
     while (count--)
-	[dataPtr[count] perform: aSelector];
+        [dataPtr[count] perform: aSelector];
     return self;
 }
 
-- (id)makeObjectsPerform:(SEL)aSelector with:anObject
-{
+- (id)makeObjectsPerform:(SEL)aSelector with:anObject {
     unsigned	count = numElements;
     while (count--)
 	[dataPtr[count] perform: aSelector with: anObject];
     return self;
 }
 
--(id)appendList: (List *)otherList
-{
+-(id)appendList:(List *)otherList {
     unsigned i, count;
     
     for (i = 0, count = [otherList count]; i < count; i++)
-	[self addObject: [otherList objectAt: i]];
+        [self addObject: [otherList objectAt: i]];
     return self;
 }
 

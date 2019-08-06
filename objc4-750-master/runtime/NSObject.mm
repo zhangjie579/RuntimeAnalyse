@@ -657,7 +657,7 @@ class AutoreleasePoolPage {
     // never uses them.
 #   define EMPTY_POOL_PLACEHOLDER ((id*)1)
 
-#   define POOL_BOUNDARY nil
+#   define POOL_BOUNDARY nil /// 边界
     static pthread_key_t const key = AUTORELEASE_POOL_KEY;
     static uint8_t const SCRIBBLE = 0xA3;  // 0xA3A3A3A3 after releasing
     // 最大的size
@@ -999,7 +999,7 @@ class AutoreleasePoolPage {
         return page->add(obj);
     }
 
-    // 没有page，创建一个
+    /// 没有page，创建一个
     static __attribute__((noinline))
     id *autoreleaseNoPage(id obj)
     {
