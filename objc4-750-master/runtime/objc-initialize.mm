@@ -110,8 +110,10 @@ monitor_t classInitLock;
 * The list is a simple array of metaclasses (the metaclass stores 
 * the initialization state). 
 **********************************************************************/
+/// 正在初始化的class
 typedef struct _objc_initializing_classes {
     int classesAllocated;
+    // 元类
     Class *metaclasses;
 } _objc_initializing_classes;
 
@@ -201,12 +203,14 @@ bool _thisThreadIsInitializingClass(Class cls)
 * This thread will be allowed to send messages to the class, but 
 *   other threads will have to wait.
 **********************************************************************/
-static void _setThisThreadIsInitializingClass(Class cls)
-{
+/// 看class是否添加到过初始化的list中_objc_initializing_classes
+static void _setThisThreadIsInitializingClass(Class cls) {
     int i;
+    // 1.获取正在初始化class list
     _objc_initializing_classes *list = _fetchInitializingClassList(YES);
     cls = cls->getMeta();
   
+    // 2.如果list中存在cls的元类, 返回
     // paranoia: explicitly disallow duplicates
     for (i = 0; i < list->classesAllocated; i++) {
         if (cls == list->metaclasses[i]) {
@@ -214,21 +218,26 @@ static void _setThisThreadIsInitializingClass(Class cls)
             return; // already the initializer
         }
     }
+    
+    /* 到这说明cls没初始化 */
   
+    // 3.找到为空位置, 放入meta class
     for (i = 0; i < list->classesAllocated; i++) {
-        if (! list->metaclasses[i]) {
+        if (!list->metaclasses[i]) {
             list->metaclasses[i] = cls;
             return;
         }
     }
+    
+    // 4.到这说明: 没找到空位插入, 满了, 扩容
 
-    // class list is full - reallocate
+    // 扩容 class list is full - reallocate
     list->classesAllocated = list->classesAllocated * 2 + 1;
-    list->metaclasses = (Class *) 
-        realloc(list->metaclasses,
+    list->metaclasses = (Class *)realloc(list->metaclasses,
                           list->classesAllocated * sizeof(Class));
-    // zero out the new entries
+    // 插入到最后 zero out the new entries
     list->metaclasses[i++] = cls;
+    // 后面的全设为nil
     for ( ; i < list->classesAllocated; i++) {
         list->metaclasses[i] = nil;
     }
@@ -367,8 +376,8 @@ void waitForInitializeToComplete(Class cls)
 }
 
 
-void callInitialize(Class cls)
-{
+/// 执行initialize方法, 用的是objc_msgSend
+void callInitialize(Class cls) {
     ((void(*)(Class, SEL))objc_msgSend)(cls, SEL_initialize);
     asm("");
 }
@@ -379,11 +388,16 @@ void callInitialize(Class cls)
 * Returns true if the class has no +initialize implementation or 
 * has a +initialize implementation that looks empty.
 * Any root class +initialize implemetation is assumed to be trivial.
+ 如果类没有+ initialize实现或者具有看起来为空的+ initialize实现，则返回true
+ 假设任何根类+初始化实现都是微不足道的
 **********************************************************************/
-static bool classHasTrivialInitialize(Class cls)
-{
+/// 关于initialize方法的实现
+static bool classHasTrivialInitialize(Class cls) {
+    // 1.根类、根元类
     if (cls->isRootClass() || cls->isRootMetaclass()) return true;
 
+    // 类 -> 元类
+    // NSObject meta class的isa是自己, super是NSObject class
     Class rootCls = cls->ISA()->ISA()->superclass;
     
     IMP rootImp = lookUpImpOrNil(rootCls->ISA(), SEL_initialize, rootCls, 
@@ -498,7 +512,7 @@ void _class_initialize(Class cls)
         _class_initialize(supercls);
     }
     
-    // 3.设置class为initializing Try to atomically set CLS_INITIALIZING.
+    // 3.设置class为initializing, 保存在isa的flag
     {
         monitor_locker_t lock(classInitLock);
         if (!cls->isInitialized() && !cls->isInitializing()) {
@@ -510,6 +524,7 @@ void _class_initialize(Class cls)
     if (reallyInitialize) {
         // We successfully set the CLS_INITIALIZING bit. Initialize the class.
         
+        // 看class是否添加到过初始化的list中_objc_initializing_classes
         // Record that we're initializing this class so we can message it.
         _setThisThreadIsInitializingClass(cls);
 

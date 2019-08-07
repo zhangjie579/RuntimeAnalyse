@@ -176,6 +176,7 @@
 * object_getClass.
 * Locking: None. If you add locking, tell gdb (rdar://7516456).
 **********************************************************************/
+/// 获取isa
 Class object_getClass(id obj)
 {
     if (obj) return obj->getIsa();
@@ -186,8 +187,8 @@ Class object_getClass(id obj)
 /***********************************************************************
 * object_setClass.
 **********************************************************************/
-Class object_setClass(id obj, Class cls)
-{
+/// 设置isa
+Class object_setClass(id obj, Class cls) {
     if (!obj) return nil;
 
     // Prevent a deadlock between the weak reference machinery
@@ -195,9 +196,11 @@ Class object_setClass(id obj, Class cls)
     // weakly-referenced object has an un-+initialized isa.
     // Unresolved future classes are not so protected.
     if (!cls->isFuture()  &&  !cls->isInitialized()) {
+        // 初始化class
         _class_initialize(_class_getNonMetaClass(cls, nil));
     }
 
+    // 修改isa
     return obj->changeIsa(cls);
 }
 
@@ -205,8 +208,8 @@ Class object_setClass(id obj, Class cls)
 /***********************************************************************
 * object_isClass.
 **********************************************************************/
-BOOL object_isClass(id obj)
-{
+/// obj是class
+BOOL object_isClass(id obj) {
     if (!obj) return NO;
     return obj->isClass();
 }
@@ -215,8 +218,7 @@ BOOL object_isClass(id obj)
 /***********************************************************************
 * object_getClassName.
 **********************************************************************/
-const char *object_getClassName(id obj)
-{
+const char *object_getClassName(id obj) {
     return class_getName(obj ? obj->getIsa() : nil);
 }
 
@@ -224,8 +226,8 @@ const char *object_getClassName(id obj)
 /***********************************************************************
  * object_getMethodImplementation.
  **********************************************************************/
-IMP object_getMethodImplementation(id obj, SEL name)
-{
+/// 通过obj.isa的selector
+IMP object_getMethodImplementation(id obj, SEL name) {
     Class cls = (obj ? obj->getIsa() : nil);
     return class_getMethodImplementation(cls, name);
 }
@@ -795,8 +797,7 @@ IMP class_getMethodImplementation(Class cls, SEL sel)
 }
 
 #if SUPPORT_STRET
-IMP class_getMethodImplementation_stret(Class cls, SEL sel)
-{
+IMP class_getMethodImplementation_stret(Class cls, SEL sel) {
     IMP imp = class_getMethodImplementation(cls, sel);
 
     // Translate forwarding function to struct-returning version
@@ -888,8 +889,7 @@ Class _calloc_class(size_t size)
     return (Class) calloc(1, size);
 }
 
-Class class_getSuperclass(Class cls)
-{
+Class class_getSuperclass(Class cls) {
     if (!cls) return nil;
     return cls->superclass;
 }
@@ -900,9 +900,8 @@ BOOL class_isMetaClass(Class cls)
     return cls->isMetaClass();
 }
 
-
-size_t class_getInstanceSize(Class cls)
-{
+/// 获取class所占内存
+size_t class_getInstanceSize(Class cls) {
     if (!cls) return 0;
     return cls->alignedInstanceSize();
 }

@@ -105,6 +105,7 @@
     // check isKindOf:
     Class cls;
     Class protoClass = objc_getClass("Protocol");
+    // 1.找到第1个other族簇的isa为Protocol
     for (cls = object_getClass(other); cls; cls = cls->superclass) {
         if (cls == protoClass) break;
     }

@@ -257,7 +257,9 @@ static id acquireValue(id value, uintptr_t policy) {
     return value;
 }
 
+/// 释放value, strong的话release
 static void releaseValue(id value, uintptr_t policy) {
+    // 策略为retain, 就调用release
     if (policy & OBJC_ASSOCIATION_SETTER_RETAIN) {
         return objc_release(value);
     }
@@ -266,6 +268,7 @@ static void releaseValue(id value, uintptr_t policy) {
 /// 释放
 struct ReleaseValue {
     void operator() (ObjcAssociation &association) {
+        // 值、策略
         releaseValue(association.value(), association.policy());
     }
 };
@@ -323,8 +326,10 @@ void _object_set_associative_reference(id object, void *key, id value, uintptr_t
     if (old_association.hasValue()) ReleaseValue()(old_association);
 }
 
-/// 移除管理对象
+/// 移除object的所有关联类型对象
+/// AssociationsManager(全局管理关联类型的manager) -> AssociationsHashMap(哈希表, 根据object可以找到object的关联类型) -> ObjectAssociationMap(哈希表, 存储这关联类型, 根据key查找) -> ObjcAssociation(关联类型对象)
 void _object_remove_assocations(id object) {
+    // 相当于iOS的array 可自动扩容, 顺序存储结构
     vector< ObjcAssociation,ObjcAllocator<ObjcAssociation> > elements;
     {
         // 1.AssociationsManager
@@ -332,23 +337,27 @@ void _object_remove_assocations(id object) {
         // 2.从manager找到AssociationsHashMap
         AssociationsHashMap &associations(manager.associations());
         if (associations.size() == 0) return;
-        // 3.以object为key，从AssociationsHashMap找到，它存的关联对象的哈希表AssociationsHashMap
+        
+        // 3.以object为key，从AssociationsHashMap找到它存的关联对象的哈希表AssociationsHashMap
         disguised_ptr_t disguised_object = DISGUISE(object);
+        
+        // 迭代器
         AssociationsHashMap::iterator i = associations.find(disguised_object);
-        // 4.遍历
+        // 4.说明不为空
         if (i != associations.end()) {
-            // copy all of the associations that need to be removed.
             // 它里面保存着ObjcAssociation
             ObjectAssociationMap *refs = i->second;
-            // 移除
+            // 5.遍历, 把object的关联对象添加到vector
             for (ObjectAssociationMap::iterator j = refs->begin(), end = refs->end(); j != end; ++j) {
+                // iterator.second为value
                 elements.push_back(j->second);
             }
-            // remove the secondary table.
+            // 6.从AssociationsHashMap哈希表中移除object的表ObjectAssociationMap
             delete refs;
             associations.erase(i);
         }
     }
-    // the calls to releaseValue() happen outside of the lock.
+    // 7.ReleaseValue(): 相当于oc的block, 从头到尾遍历elements执行ReleaseValue
+    // 等价于 for_each(elements.begin(), elements.end(), [](ObjcAssociation &association) { });
     for_each(elements.begin(), elements.end(), ReleaseValue());
 }

@@ -529,6 +529,7 @@ void cache_t::bad_cache(id receiver, SEL sel, Class isa)
          "invalid object, or a memory error somewhere else.");
 }
 
+#pragma mark - cache中找方法
 /// cache中找方法, 与receiver无关
 bucket_t * cache_t::find(cache_key_t k, id receiver) {
     assert(k != 0);
@@ -540,6 +541,7 @@ bucket_t * cache_t::find(cache_key_t k, id receiver) {
     mask_t begin = cache_hash(k, m);
     mask_t i = begin;
     do {
+        // 0: 说明结束了
         if (b[i].key() == 0  ||  b[i].key() == k) {
             return &b[i];
         }
@@ -656,12 +658,14 @@ void cache_erase_nolock(Class cls)
     }
 }
 
-
-void cache_delete(Class cls)
-{
+/// 删除cls的方法cache
+void cache_delete(Class cls) {
     mutex_locker_t lock(cacheUpdateLock);
+    // 释放
     if (cls->cache.canBeFreed()) {
+        // cache_counts[bucket]--
         if (PrintCaches) recordDeadCache(cls->cache.capacity());
+        // 释放buckets
         free(cls->cache.buckets());
     }
 }
@@ -853,6 +857,7 @@ static void _garbage_make_room(void)
 * precisely the block's size.
 * Cache locks: cacheUpdateLock must be held by the caller.
 **********************************************************************/
+/// 收集旧的hashtable中的所有元素，并且在元素数量达到一定阀值（32*1024字节）时统一销毁
 static void cache_collect_free(bucket_t *data, mask_t capacity)
 {
     cacheUpdateLock.assertLocked();

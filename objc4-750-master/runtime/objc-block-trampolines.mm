@@ -437,9 +437,7 @@ argumentModeForBlock(id block)
 
 
 // `block` must already have been copied 
-IMP 
-_imp_implementationWithBlockNoCopy(id block)
-{
+IMP _imp_implementationWithBlockNoCopy(id block) {
     runtimeLock.assertLocked();
 
     TrampolineBlockPageGroup *pageGroup = 

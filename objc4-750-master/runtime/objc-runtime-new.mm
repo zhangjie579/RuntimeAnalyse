@@ -1685,6 +1685,7 @@ static Protocol *getProtocol(const char *name)
 * a protocol struct that has been reallocated.
 * Locking: runtimeLock must be read- or write-locked by the caller
 **********************************************************************/
+/// protocol_ref_t -> protocol_t
 static protocol_t *remapProtocol(protocol_ref_t proto)
 {
     runtimeLock.assertLocked();
@@ -3026,8 +3027,7 @@ void _unload_image(header_info *hi)
 * Returns a pointer to this method's objc_method_description.
 * Locking: none
 **********************************************************************/
-struct objc_method_description *
-method_getDescription(Method m)
+struct objc_method_description *method_getDescription(Method m)
 {
     if (!m) return nil;
     return (struct objc_method_description *)m;
@@ -3345,9 +3345,9 @@ fixupProtocolIfNeeded(protocol_t *proto)
     }
 }
 
-
-static method_list_t *
-getProtocolMethodList(protocol_t *proto, bool required, bool instance)
+/// 获取协议方法列表
+/// required: 必须实现的方法; instance: 对象方法
+static method_list_t *getProtocolMethodList(protocol_t *proto, bool required, bool instance)
 {
     method_list_t **mlistp = nil;
     if (required) {
@@ -3383,16 +3383,16 @@ protocol_getMethod_nolock(protocol_t *proto, SEL sel,
 
     assert(proto->isFixedUp());
 
-    // 方法列表
+    // 1.方法列表
     method_list_t *mlist = 
         getProtocolMethodList(proto, isRequiredMethod, isInstanceMethod);
     if (mlist) {
-        // 看里面有没有name为sel的method
+        // 2.看里面有没有name为sel的method
         method_t *m = search_method_list(mlist, sel);
         if (m) return m;
     }
 
-    // 循环，子protocol
+    // 3.循环，子protocol, 递归调用
     if (recursive  &&  proto->protocols) {
         method_t *m;
         for (uint32_t i = 0; i < proto->protocols->count; i++) {

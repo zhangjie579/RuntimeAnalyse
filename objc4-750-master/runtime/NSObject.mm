@@ -248,13 +248,13 @@ objc_retain_autorelease(id obj)
 }
 
 
-void
-objc_storeStrong(id *location, id obj)
-{
+void objc_storeStrong(id *location, id obj) {
+    // 之前的
     id prev = *location;
     if (obj == prev) {
         return;
     }
+    // 新的 + 1
     objc_retain(obj);
     *location = obj;
     // 释放之前这个位置上的
@@ -1349,16 +1349,12 @@ objc_object::sidetable_present()
 
 #if SUPPORT_NONPOINTER_ISA
 
-void 
-objc_object::sidetable_lock()
-{
+void objc_object::sidetable_lock() {
     SideTable& table = SideTables()[this];
     table.lock();
 }
 
-void 
-objc_object::sidetable_unlock()
-{
+void objc_object::sidetable_unlock() {
     SideTable& table = SideTables()[this];
     table.unlock();
 }
