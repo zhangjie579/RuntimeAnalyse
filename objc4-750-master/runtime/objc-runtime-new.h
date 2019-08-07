@@ -893,8 +893,7 @@ class method_array_t : public list_array_tt<method_t, method_list_t>
 };
 
 
-class property_array_t : 
-    public list_array_tt<property_t, property_list_t> 
+class property_array_t : public list_array_tt<property_t, property_list_t>
 {
     typedef list_array_tt<property_t, property_list_t> Super;
 
@@ -905,8 +904,7 @@ class property_array_t :
 };
 
 
-class protocol_array_t : 
-    public list_array_tt<protocol_ref_t, protocol_list_t> 
+class protocol_array_t : public list_array_tt<protocol_ref_t, protocol_list_t>
 {
     typedef list_array_tt<protocol_ref_t, protocol_list_t> Super;
 
@@ -1468,6 +1466,7 @@ struct objc_class : objc_object {
         assert(isRealized());
         if (newSize != data()->ro->instanceSize) {
             assert(data()->flags & RW_COPIED_RO);
+            // 给const赋值
             *const_cast<uint32_t *>(&data()->ro->instanceSize) = newSize;
         }
         bits.setFastInstanceSize(newSize);

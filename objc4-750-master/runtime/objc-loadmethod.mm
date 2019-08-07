@@ -59,20 +59,15 @@ static int loadable_categories_allocated = 0;
 * Class cls has just become connected. Schedule it for +load if
 * it implements a +load method.
 **********************************************************************/
-/// 将imp和class添加到调用列表
-void add_class_to_loadable_list(Class cls)
-{
+/// 将load imp和class添加到调用列表
+void add_class_to_loadable_list(Class cls) {
     IMP method;
 
     loadMethodLock.assertLocked();
 
+    // load方法的imp
     method = cls->getLoadMethod();
     if (!method) return;  // Don't bother if cls has no +load method
-    
-    if (PrintLoading) {
-        _objc_inform("LOAD: class '%s' scheduled for +load", 
-                     cls->nameForLogging());
-    }
     
     if (loadable_classes_used == loadable_classes_allocated) {
         loadable_classes_allocated = loadable_classes_allocated*2 + 16;

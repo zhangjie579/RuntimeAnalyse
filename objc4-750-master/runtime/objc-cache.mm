@@ -620,8 +620,7 @@ static void cache_fill_nolock(Class cls, SEL sel, IMP imp, id receiver) {
 }
 
 /// 缓存方法, 只与class有关
-void cache_fill(Class cls, SEL sel, IMP imp, id receiver)
-{
+void cache_fill(Class cls, SEL sel, IMP imp, id receiver) {
 #if !DEBUG_TASK_THREADS
     mutex_locker_t lock(cacheUpdateLock);
     cache_fill_nolock(cls, sel, imp, receiver);
@@ -635,8 +634,7 @@ void cache_fill(Class cls, SEL sel, IMP imp, id receiver)
 /// 删除class的cache
 // Reset this entire cache to the uncached lookup by reallocating it.
 // This must not shrink the cache - that breaks the lock-free scheme.
-void cache_erase_nolock(Class cls)
-{
+void cache_erase_nolock(Class cls) {
     cacheUpdateLock.assertLocked();
 
     // 1.获取class的cache

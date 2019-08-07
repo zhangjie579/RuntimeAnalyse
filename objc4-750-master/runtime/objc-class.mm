@@ -576,23 +576,26 @@ void fixupCopiedIvars(id newObject, id oldObject)
 * cls should be a metaclass.
 * Does not check if the method already exists.
 **********************************************************************/
-static void _class_resolveClassMethod(Class cls, SEL sel, id inst)
-{
+/// 执行resolveClassMethod
+static void _class_resolveClassMethod(Class cls, SEL sel, id inst) {
     assert(cls->isMetaClass());
 
-    if (! lookUpImpOrNil(cls, SEL_resolveClassMethod, inst, 
-                         NO/*initialize*/, YES/*cache*/, NO/*resolver*/)) 
-    {
+    // 1.查找resolveClassMethod的imp
+    if (!lookUpImpOrNil(cls, SEL_resolveClassMethod, inst,
+                         NO/*initialize*/, YES/*cache*/, NO/*resolver*/)) {
         // Resolver not implemented.
         return;
     }
 
+    // 2.找到 - 执行
     BOOL (*msg)(Class, SEL, SEL) = (typeof(msg))objc_msgSend;
     bool resolved = msg(_class_getNonMetaClass(cls, inst), 
                         SEL_resolveClassMethod, sel);
 
     // Cache the result (good or bad) so the resolver doesn't fire next time.
     // +resolveClassMethod adds to self->ISA() a.k.a. cls
+    
+    // 3.缓存sel方法
     IMP imp = lookUpImpOrNil(cls, sel, inst, 
                              NO/*initialize*/, YES/*cache*/, NO/*resolver*/);
 
@@ -621,21 +624,20 @@ static void _class_resolveClassMethod(Class cls, SEL sel, id inst)
 * cls may be a metaclass or a non-meta class.
 * Does not check if the method already exists.
 **********************************************************************/
-static void _class_resolveInstanceMethod(Class cls, SEL sel, id inst)
-{
-    if (! lookUpImpOrNil(cls->ISA(), SEL_resolveInstanceMethod, cls, 
-                         NO/*initialize*/, YES/*cache*/, NO/*resolver*/)) 
-    {
-        // Resolver not implemented.
+static void _class_resolveInstanceMethod(Class cls, SEL sel, id inst) {
+    // 1.没找到resolveInstanceMethod的imp -> return
+    if (!lookUpImpOrNil(cls->ISA(), SEL_resolveInstanceMethod, cls,
+                         NO/*initialize*/, YES/*cache*/, NO/*resolver*/)) {
         return;
     }
 
-    // 执行resolveInstanceMethod方法
+    // 2.执行resolveInstanceMethod方法
     BOOL (*msg)(Class, SEL, SEL) = (typeof(msg))objc_msgSend;
     bool resolved = msg(cls, SEL_resolveInstanceMethod, sel);
 
     // Cache the result (good or bad) so the resolver doesn't fire next time.
     // +resolveInstanceMethod adds to self a.k.a. cls
+    // 3.缓存sel
     IMP imp = lookUpImpOrNil(cls, sel, inst, 
                              NO/*initialize*/, YES/*cache*/, NO/*resolver*/);
 
@@ -665,20 +667,20 @@ static void _class_resolveInstanceMethod(Class cls, SEL sel, id inst)
 * Returns nothing; any result would be potentially out-of-date already.
 * Does not check if the method already exists.
 **********************************************************************/
-void _class_resolveMethod(Class cls, SEL sel, id inst)
-{
-    if (! cls->isMetaClass()) { // 不是元类
+void _class_resolveMethod(Class cls, SEL sel, id inst) {
+    // 1.不是元类
+    if (!cls->isMetaClass()) {
         // try [cls resolveInstanceMethod:sel] 调用它
         _class_resolveInstanceMethod(cls, sel, inst);
-    } 
+    }
+    // 2.是元类
     else {
-        // try [nonMetaClass resolveClassMethod:sel]
-        // and [cls resolveInstanceMethod:sel]
+        // try [nonMetaClass resolveClassMethod:sel] and [cls resolveInstanceMethod:sel]
+        // 2.1.执行resolveClassMethod
         _class_resolveClassMethod(cls, sel, inst);
-        // 如果imp不为nil，执行
+        // 如果imp为nil，执行, 如果上面在resolveClassMethod方法中找到了sel, 会缓存sel的imp, 这边没找到说明没执行sel, so 让它在走个resolveInstanceMethod
         if (!lookUpImpOrNil(cls, sel, inst, 
-                            NO/*initialize*/, YES/*cache*/, NO/*resolver*/)) 
-        {
+                            NO/*initialize*/, YES/*cache*/, NO/*resolver*/)) {
             _class_resolveInstanceMethod(cls, sel, inst);
         }
     }

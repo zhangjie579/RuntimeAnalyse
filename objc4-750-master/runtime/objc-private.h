@@ -475,6 +475,7 @@ extern bool sharedRegionContains(const void *ptr);
 extern Class _calloc_class(size_t size);
 
 /* method lookup */
+// MARK: - 查找方法imp
 extern IMP lookUpImpOrNil(Class, SEL, id obj, bool initialize, bool cache, bool resolver);
 extern IMP lookUpImpOrForward(Class, SEL, id obj, bool initialize, bool cache, bool resolver);
 
@@ -848,6 +849,7 @@ class StripedMap {
 // nil is disguised as itself so zero-filled memory works as expected, 
 // which means 0x80..00 is also disguised as itself but we don't care.
 // Note that weak_entry_t knows about this encoding.
+// 指针与uintptr_t的转换
 template <typename T>
 class DisguisedPtr {
     uintptr_t value;

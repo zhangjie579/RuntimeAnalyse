@@ -30,6 +30,7 @@ __BEGIN_DECLS
 
 struct _objc_initializing_classes;
 
+/// 第一次调用class的方法，初始化类对象, 里面会调用initialize方法
 extern void _class_initialize(Class cls);
 
 extern void _destroyInitializingClassList(struct _objc_initializing_classes *list);

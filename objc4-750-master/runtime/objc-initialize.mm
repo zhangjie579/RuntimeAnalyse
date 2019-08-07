@@ -378,6 +378,8 @@ void waitForInitializeToComplete(Class cls)
 
 /// 执行initialize方法, 用的是objc_msgSend
 void callInitialize(Class cls) {
+    // (*load_method)(cls, SEL_load)这是load调用, 直接用函数指针调用
+    // 它这个走的是objc_msgSend
     ((void(*)(Class, SEL))objc_msgSend)(cls, SEL_initialize);
     asm("");
 }
@@ -496,8 +498,7 @@ void performForkChildInitialize(Class cls, Class supercls)
 * uninitialized class. Force initialization of superclasses first.
 **********************************************************************/
 /// 第一次调用class的方法，初始化类对象
-void _class_initialize(Class cls)
-{
+void _class_initialize(Class cls) {
     // 1.不是元类
     assert(!cls->isMetaClass());
 

@@ -585,8 +585,7 @@ static void removeUnattachedCategoryForClass(category_t *cat, Class cls)
 * Locking: runtimeLock must be held by the caller.
 **********************************************************************/
 static category_list *
-unattachedCategoriesForClass(Class cls, bool realizing)
-{
+unattachedCategoriesForClass(Class cls, bool realizing) {
     runtimeLock.assertLocked();
     return (category_list *)NXMapRemove(unattachedCategories(), cls);
 }
@@ -765,14 +764,14 @@ prepareMethodLists(Class cls, method_list_t **addedLists, int addedCount,
 // Assumes the categories in cats are all loaded and sorted by load order, 
 // oldest categories first.
 /// 添加category的属性到class，具体是到rw内
-static void 
-attachCategories(Class cls, category_list *cats, bool flush_caches)
-{
+static void attachCategories(Class cls, category_list *cats, bool flush_caches) {
     if (!cats) return;
     if (PrintReplacedMethods) printReplacements(cls, cats);
 
+    // 1.是否为元类
     bool isMeta = cls->isMetaClass();
 
+    // 2.分配内存
     // fixme rearrange to remove these intermediate allocations
     method_list_t **mlists = (method_list_t **)
         malloc(cats->count * sizeof(*mlists));
@@ -782,42 +781,52 @@ attachCategories(Class cls, category_list *cats, bool flush_caches)
         malloc(cats->count * sizeof(*protolists));
 
     // Count backwards through cats to get newest categories first
+    
+    // 3.对应方法、property、protocol的个数, 也能做为index
     int mcount = 0;
     int propcount = 0;
     int protocount = 0;
-    // category的个数
+    
+    // 4.category的个数
     int i = cats->count;
     bool fromBundle = NO;
-    // 遍历category的子category
+    
+    // 5.遍历category的子category
     while (i--) {
+        // locstamped_category_t里面有category_t
         auto& entry = cats->list[i];
 
-        // 方法列表
+        // 5.1.把category_t的方法添加到mlists
         method_list_t *mlist = entry.cat->methodsForMeta(isMeta);
         if (mlist) {
             mlists[mcount++] = mlist;
             fromBundle |= entry.hi->isBundle();
         }
 
+        // 5.2.添加property
         property_list_t *proplist = 
             entry.cat->propertiesForMeta(isMeta, entry.hi);
         if (proplist) {
             proplists[propcount++] = proplist;
         }
 
+        // 5.2.添加protolist
         protocol_list_t *protolist = entry.cat->protocols;
         if (protolist) {
             protolists[protocount++] = protolist;
         }
     }
 
-    /// 4.获取rw, 并将method，property，protocol 添加上去
+    // 6.获取rw, 并将method，property，protocol 添加上去
     auto rw = cls->data();
     
-    // 5.合并方法
+    // 7.合并方法、protocol、property
     prepareMethodLists(cls, mlists, mcount, NO, fromBundle);
+    // 它还是把添加的放到最前面
     rw->methods.attachLists(mlists, mcount);
+    // 回收资源
     free(mlists);
+    // 删除class、子类的方法cache
     if (flush_caches  &&  mcount > 0) flushCaches(cls);
 
     rw->properties.attachLists(proplists, propcount);
@@ -834,9 +843,12 @@ attachCategories(Class cls, category_list *cats, bool flush_caches)
 * Attaches any outstanding categories.
 * Locking: runtimeLock must be held by the caller
 **********************************************************************/
-static void methodizeClass(Class cls)
-{
+/// 合并数据到class的rw
+static void methodizeClass(Class cls) {
     runtimeLock.assertLocked();
+    
+    // 1.获取一些数据
+    
     // 是否是元类
     bool isMeta = cls->isMetaClass();
     auto rw = cls->data();
@@ -848,7 +860,7 @@ static void methodizeClass(Class cls)
                      cls->nameForLogging(), isMeta ? "(meta)" : "");
     }
 
-    // 方法列表
+    // 2.添加方法列表到rw
     // Install methods and properties that the class implements itself.
     method_list_t *list = ro->baseMethods();
     if (list) {
@@ -856,16 +868,19 @@ static void methodizeClass(Class cls)
         rw->methods.attachLists(&list, 1);
     }
 
+    // 3.添加property到rw
     property_list_t *proplist = ro->baseProperties;
     if (proplist) {
         rw->properties.attachLists(&proplist, 1);
     }
 
+    // 4.添加protocol到rw
     protocol_list_t *protolist = ro->baseProtocols;
     if (protolist) {
         rw->protocols.attachLists(&protolist, 1);
     }
 
+    // 5.NSObject的元类添加initialize方法
     // Root classes get bonus method implementations if they don't have 
     // them already. These apply before category replacements.
     if (cls->isRootMetaclass()) {
@@ -874,6 +889,7 @@ static void methodizeClass(Class cls)
     }
 
     // Attach categories.
+    // 6.添加分类列表
     category_list *cats = unattachedCategoriesForClass(cls, true /*realizing*/);
     attachCategories(cls, cats, false /*don't flush caches*/);
 
@@ -1198,8 +1214,7 @@ static void removeNamedClass(Class cls, const char *name)
 * Provides an upper bound for any iteration of classes, 
 * to prevent spins when runtime metadata is corrupted.
 **********************************************************************/
-unsigned unreasonableClassCount()
-{
+unsigned unreasonableClassCount() {
     runtimeLock.assertLocked();
 
     int base = NXCountMapTable(gdb_objc_realized_classes) +
@@ -1360,8 +1375,7 @@ static void addRemappedClass(Class oldcls, Class newcls)
 * Returns nil if cls is ignored because of weak linking.
 * Locking: runtimeLock must be read- or write-locked by the caller
 **********************************************************************/
-static Class remapClass(Class cls)
-{
+static Class remapClass(Class cls) {
     runtimeLock.assertLocked();
 
     Class c2;
@@ -1873,8 +1887,7 @@ static void reconcileInstanceVariables(Class cls, Class supercls, const class_ro
 * Locking: runtimeLock must be write-locked by the caller
 **********************************************************************/
 /// 实例化class, 设置属性，size，方法，protocol...
-static Class realizeClass(Class cls)
-{
+static Class realizeClass(Class cls) {
     runtimeLock.assertLocked();
 
     const class_ro_t *ro;
@@ -1883,20 +1896,23 @@ static Class realizeClass(Class cls)
     Class metacls;
     bool isMeta;
 
+    // 1.找不到cls, cls已经初始化了 -> return
     if (!cls) return nil;
     if (cls->isRealized()) return cls;
     assert(cls == remapClass(cls));
 
     // fixme verify class is not in an un-dlopened part of the shared cache?
 
+    // 2.rw、ro的初始化
     ro = (const class_ro_t *)cls->data();
     if (ro->flags & RO_FUTURE) {
         // This was a future class. rw data is already allocated.
+        // 后面再初始化, 现在data其实是class_ro_t
         rw = cls->data();
         ro = cls->data()->ro;
         cls->changeInfo(RW_REALIZED|RW_REALIZING, RW_FUTURE);
     } else {
-        // Normal class. Allocate writeable class data.
+        // 正常的class, 分配rw内存
         rw = (class_rw_t *)calloc(sizeof(class_rw_t), 1);
         rw->ro = ro;
         rw->flags = RW_REALIZED|RW_REALIZING;
@@ -1921,6 +1937,8 @@ static Class realizeClass(Class cls)
     // Realize superclass and metaclass, if they aren't already.
     // This needs to be done after RW_REALIZED is set above, for root classes.
     // This needs to be done after class index is chosen, for root metaclasses.
+    
+    // 3.递归初始化super class, 元类
     supercls = realizeClass(remapClass(cls->superclass));
     metacls = realizeClass(remapClass(cls->ISA()));
 
@@ -1960,6 +1978,8 @@ static Class realizeClass(Class cls)
 #endif
 
     // Update superclass and metaclass in case of remapping
+    
+    // 4.设置superclass、isa
     cls->superclass = supercls;
     cls->initClassIsa(metacls);
 
@@ -1968,6 +1988,8 @@ static Class realizeClass(Class cls)
     if (supercls  &&  !isMeta) reconcileInstanceVariables(cls, supercls, ro);
 
     // Set fastInstanceSize if it wasn't set already.
+    
+    // 5.设置instanceSize, 如果它不存在
     cls->setInstanceSize(ro->instanceSize);
 
     // Copy some flags from ro to rw
@@ -1985,7 +2007,7 @@ static Class realizeClass(Class cls)
         addRootClass(cls);
     }
 
-    // Attach categories
+    // 6.合并分类
     methodizeClass(cls);
 
     return cls;
@@ -2125,8 +2147,8 @@ BOOL _class_isFutureClass(Class cls)
 * and subclasses thereof. Nil flushes all classes.)
 * Locking: acquires runtimeLock
 **********************************************************************/
-static void flushCaches(Class cls)
-{
+/// 删除class、子类的方法cache
+static void flushCaches(Class cls) {
     runtimeLock.assertLocked();
 
     mutex_locker_t lock(cacheUpdateLock);
@@ -2483,8 +2505,7 @@ readProtocol(protocol_t *newproto, Class protocol_class,
  9.处理所有category，包括class和meta class
  10.初始化所有未初始化的类
  */
-void _read_images(header_info **hList, uint32_t hCount, int totalClasses, int unoptimizedTotalClasses)
-{
+void _read_images(header_info **hList, uint32_t hCount, int totalClasses, int unoptimizedTotalClasses) {
     header_info *hi;
     uint32_t hIndex;
     size_t count;
@@ -2568,7 +2589,7 @@ void _read_images(header_info **hList, uint32_t hCount, int totalClasses, int un
         // Preoptimized classes don't go in this table.
         // 4/3 is NXMapTable's load factor
         // 实例化存储类的哈希表，并且根据当前类数量做动态扩容
-        int namedClassesSize = 
+        int namedClassesSize =
             (isPreoptimized() ? unoptimizedTotalClasses : totalClasses) * 4 / 3;
         gdb_objc_realized_classes =
             NXCreateMapTable(NXStrValueMapPrototype, namedClassesSize);
@@ -4302,8 +4323,7 @@ class_copyPropertyList(Class cls, unsigned int *outCount)
 * Locking: runtimeLock must be read- or write-locked by the caller.
 **********************************************************************/
 IMP 
-objc_class::getLoadMethod()
-{
+objc_class::getLoadMethod() {
     runtimeLock.assertLocked();
 
     const method_list_t *mlist;
@@ -4836,11 +4856,10 @@ static method_t *getMethodNoSuper_nolock(Class cls, SEL sel)
 
     // 从头开始遍历
     for (auto mlists = cls->data()->methods.beginLists(), 
-              end = cls->data()->methods.endLists(); 
+              end = cls->data()->methods.endLists(); // 结束的标志
          mlists != end;
-         ++mlists)
-    {
-        // 找func
+         ++mlists) {
+        // 根据sel, 找func
         method_t *m = search_method_list(*mlists, sel);
         if (m) return m;
     }
@@ -4917,9 +4936,7 @@ Method class_getInstanceMethod(Class cls, SEL sel)
 * cls is the method whose cache should be filled. 
 * implementer is the class that owns the implementation in question.
 **********************************************************************/
-static void
-log_and_fill_cache(Class cls, IMP imp, SEL sel, id receiver, Class implementer)
-{
+static void log_and_fill_cache(Class cls, IMP imp, SEL sel, id receiver, Class implementer) {
 #if SUPPORT_MESSAGE_LOGGING
     if (objcMsgLogEnabled) {
         bool cacheIt = logMessageSend(implementer->isMetaClass(), 
@@ -4967,16 +4984,16 @@ IMP _class_lookupMethodAndLoadCache3(id obj, SEL sel, Class cls)
 /// 消息机制会走这, 获取方法的imp
 /// 自己cache -> 自己method -> super cache -> super method -> 消息机制
 IMP lookUpImpOrForward(Class cls, SEL sel, id inst, 
-                       bool initialize, bool cache, bool resolver)
-{
+                       bool initialize, bool cache, bool resolver) {
     IMP imp = nil;
     bool triedResolver = NO;
 
     runtimeLock.assertUnlocked();
 
-    // 1.从cache中找Optimistic cache lookup
+    // 1.从cache中找
     if (cache) {
         // 找到imp，直接返回
+        // 实现为汇编, objc_msg_arm.s 323
         imp = cache_getImp(cls, sel);
         if (imp) return imp;
     }
@@ -4998,7 +5015,7 @@ IMP lookUpImpOrForward(Class cls, SEL sel, id inst,
         realizeClass(cls);
     }
 
-    // 是否initialize
+    // 3.是否initialize
     if (initialize  &&  !cls->isInitialized()) {
         runtimeLock.unlock();
         _class_initialize (_class_getNonMetaClass(cls, inst));
@@ -5010,17 +5027,19 @@ IMP lookUpImpOrForward(Class cls, SEL sel, id inst,
     }
 
     
- retry:    
+retry: // 4.这是个标识符, 调用 goto retry 会走这
     runtimeLock.assertLocked();
 
-    // Try this class's cache. 尝试获取这个class的cache
-
+    // 4.1.获取class的cache
     imp = cache_getImp(cls, sel);
+    // 去执行done
     if (imp) goto done;
 
-    // Try this class's method lists.
+    // 4.2.到这说明没找到cache
+    
+    // 4.3.查找自己class的方法列表
     {
-        // 没有cache，从方法列表获取method
+        // 从方法列表查找method, 只是自己的, 不包括super
         Method meth = getMethodNoSuper_nolock(cls, sel);
         if (meth) {
             // 加入cache
@@ -5031,37 +5050,42 @@ IMP lookUpImpOrForward(Class cls, SEL sel, id inst,
     }
     
     // Try superclass caches and method lists.
+    // 4.4.super的方法列表
     {
         unsigned attempts = unreasonableClassCount();
-        // 从class的继承关系内遍历, 获取imp，method
+        // 4.4.1.从class的继承关系内遍历, 获取imp，method
         for (Class curClass = cls->superclass;
              curClass != nil;
-             curClass = curClass->superclass)
-        {
+             curClass = curClass->superclass) {
             // Halt if there is a cycle in the superclass chain.
+            
+            // 4.4.2.只是为了控制循环的次数
             if (--attempts == 0) {
                 _objc_fatal("Memory corruption in class list.");
             }
             
-            // Superclass cache.
+            // 4.4.3.super的cache
             imp = cache_getImp(curClass, sel);
             if (imp) {
+                // 4.4.4.找到, 并且不是消息机制的imp
                 if (imp != (IMP)_objc_msgForward_impcache) {
-                    // Found the method in a superclass. Cache it in this class.
+                    // 4.4.5.把方法缓存到cls(当前的class)
                     log_and_fill_cache(cls, imp, sel, inst, curClass);
+                    // 结束
                     goto done;
                 }
                 else {
-                    // Found a forward:: entry in a superclass.
-                    // Stop searching, but don't cache yet; call method 
-                    // resolver for this class first.
+                    // 4.4.6.imp为消息机制, 跳出循环
                     break;
                 }
             }
             
+            // 4.4.7.到这说明没找到super的cache中没找到, 找super的方法列表
+            
             // Superclass method list.
             Method meth = getMethodNoSuper_nolock(curClass, sel);
             if (meth) {
+                // 缓存, 也是缓存到cls
                 log_and_fill_cache(cls, meth->imp, sel, inst, curClass);
                 imp = meth->imp;
                 goto done;
@@ -5069,9 +5093,11 @@ IMP lookUpImpOrForward(Class cls, SEL sel, id inst,
         }
     }
 
-    // 到这来说明，只能走消息机制了
+    // 4.5.到这来说明，只能走消息机制了
     // No implementation found. Try method resolver once.
 
+    // resolver是传入的参数
+    // 上面triedResolver初始化为no
     if (resolver  &&  !triedResolver) {
         runtimeLock.unlock();
         // 走resolveInstanceMethod方法
@@ -5086,6 +5112,7 @@ IMP lookUpImpOrForward(Class cls, SEL sel, id inst,
     // No implementation found, and method resolver didn't help. 
     // Use forwarding.
 
+    // 4.6.缓存为消息机制
     imp = (IMP)_objc_msgForward_impcache;
     cache_fill(cls, sel, imp, inst);
 
